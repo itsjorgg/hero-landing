@@ -11,8 +11,8 @@
   <link rel="stylesheet" href="src/style.css">
   <script type="importmap">
   { "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
   } }
   </script>
 </head>
@@ -21,11 +21,12 @@
   <canvas id="gl" aria-hidden="true"></canvas>
 
   <footer class="ui">
-    <span>Mueve el mouse. Mantén clic para desplazar. Usa la rueda mover los elementos.</span>
+    <span>Mueve el mouse y te mira. Pasa sobre un objeto para romperlo. Mantén clic para desplazar. Usa la rueda para asomarte.</span>
     <nav aria-label="Forma">
       <button data-shape="star" class="on">Estrella</button>
       <button data-shape="cube">Cubo</button>
       <button data-shape="sphere">Esfera</button>
+      <button id="sound">Activar sonido</button>
     </nav>
   </footer>
 

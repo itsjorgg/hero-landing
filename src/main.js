@@ -3,7 +3,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 /* ========= AJUSTES (cámbialos aquí) ========= */
-const BLUE = '#58b1cf', BLUE_LIGHT = '#8dd0e4', RED = '#ee1822'; // rayas azules y rojo de la portada
+const BLUE = '#2b84dc', WHITE = '#ffffff', RED = '#ee1822'; // rayas blancas y azules, texto rojo
+const SONG = '/audio/song.mp3'; // pon tu canción en public/audio/
 const PAD = 1.25; // el plano del texto es más grande que la pantalla para que "Asoma" no deje bordes
 const FONT = (px) => `italic 700 ${px}px "Futura Bold Oblique", Jost, Futura, sans-serif`;
 const R = 7;    // distancia de la cámara al objeto
@@ -42,7 +43,7 @@ function drawText(w, h) {
   // rayas verticales azules y rayones, como la portada
   const sw = Math.max(14, Math.min(w / 28, 56)) * k;
   for (let x = 0, i = 0; x < tc.width; x += sw, i++) {
-    tx.fillStyle = i % 2 ? BLUE_LIGHT : BLUE;
+    tx.fillStyle = i % 2 ? WHITE : BLUE;
     tx.fillRect(x, 0, sw + 1, tc.height);
   }
   let s = 7;
@@ -90,16 +91,50 @@ function starGeo() {
   g.center();
   return g;
 }
+// Parte la geometría en "trozos": los triángulos de una misma celda comparten centro y azar,
+// así que se mueven juntos y al romperse se ven fragmentos en vez de polvo.
+function shatter(g, cell = 0.5) {
+  g = g.index ? g.toNonIndexed() : g;
+  const p = g.attributes.position, n = p.count;
+  const ctr = new Float32Array(n * 3), rnd = new Float32Array(n * 3), seen = new Map();
+  for (let i = 0; i < n; i += 3) {
+    const c = ['X', 'Y', 'Z'].map((a) => Math.round(((p['get' + a](i) + p['get' + a](i + 1) + p['get' + a](i + 2)) / 3) / cell) * cell);
+    const key = c.join();
+    if (!seen.has(key)) seen.set(key, [Math.random(), Math.random(), Math.random()]);
+    for (let j = 0; j < 3; j++) { ctr.set(c, (i + j) * 3); rnd.set(seen.get(key), (i + j) * 3); }
+  }
+  g.setAttribute('aCenter', new THREE.BufferAttribute(ctr, 3));
+  g.setAttribute('aRand', new THREE.BufferAttribute(rnd, 3));
+  return g;
+}
 const GEO = {
-  star: starGeo(),
-  cube: new RoundedBoxGeometry(1.5, 1.5, 1.5, 8, 0.2),
-  sphere: new THREE.SphereGeometry(1, 64, 48),
+  star: shatter(starGeo()),
+  cube: shatter(new RoundedBoxGeometry(1.5, 1.5, 1.5, 5, 0.2)),
+  sphere: shatter(new THREE.SphereGeometry(1, 40, 28)),
 };
 
-const glass = new THREE.MeshPhysicalMaterial({
-  transmission: 1, thickness: 1.4, roughness: 0.06, ior: 1.5, dispersion: 0.5,
-  clearcoat: 1, attenuationColor: new THREE.Color('#e4f4ff'), attenuationDistance: 6,
-});
+// Un vidrio por objeto: cada uno tiene sus uniforms (punto del cursor y cuánto se rompe)
+function makeGlass() {
+  const mat = new THREE.MeshPhysicalMaterial({
+    transmission: 1, thickness: 1.4, roughness: 0.06, ior: 1.5, dispersion: 0.5,
+    clearcoat: 1, attenuationColor: new THREE.Color('#e4f4ff'), attenuationDistance: 6,
+  });
+  const u = { uHit: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uTime: { value: 0 } };
+  mat.userData.u = u;
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+        attribute vec3 aCenter; attribute vec3 aRand;
+        uniform vec3 uHit; uniform float uAmt, uTime;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float k = uAmt * smoothstep(1.4, 0.1, distance(aCenter, uHit));      // 1.4 = radio de la rotura
+        vec3 dir = normalize(normalize(aCenter - uHit + 1e-4) + (aRand - 0.5) * 1.6);
+        transformed = aCenter + (position - aCenter) * (1.0 - 0.45 * k) + dir * k * (0.3 + 0.6 * aRand.x);
+        transformed += dir * sin(uTime * 8.0 + aRand.y * 20.0) * 0.03 * k;   // temblor de los trozos`);
+  };
+  return mat;
+}
 
 // [x, y, z, escala, factor de seguimiento]: el primero es el héroe, el resto lo acompaña
 const DEFS = [
@@ -107,22 +142,24 @@ const DEFS = [
   [-2.6, -1.7, 1, 0.4, 1.5], [2.6, 1.9, -1, 0.45, 1], [0.4, -2.1, -0.8, 0.35, 1.3], [-0.9, 2.2, 0, 0.3, 0.8],
 ];
 const items = DEFS.map(([x, y, z, s, k], i) => {
-  const mesh = new THREE.Mesh(GEO.star, glass);
+  const mat = makeGlass();
+  const mesh = new THREE.Mesh(GEO.star, mat);
   mesh.rotation.set(i * 1.7, i * 2.3, 0);
   scene.add(mesh);
-  return { mesh, base: new THREE.Vector3(x, y, z), s, k, spin: (i % 2 ? -1 : 1) * (0.7 + (i % 3) * 0.25) };
+  return { mesh, u: mat.userData.u, hit: new THREE.Vector3(), amt: 0, base: new THREE.Vector3(x, y, z), s, k, spin: (i % 2 ? -1 : 1) * (0.7 + (i % 3) * 0.25) };
 });
 
 /* ========= ESTADO Y MOUSE ========= */
-let mode = 'look', shape = 'star', ready = false, intro = 0, energy = 0;
+let mode = 'look', shape = 'star', ready = false, intro = 0, energy = 0, inside = false;
 const sm = { v: 1, t: 1 };                       // escala al cambiar de forma
 const t = { x: 0, y: 0 }, m = { x: 0, y: 0 }, prev = { x: 0, y: 0 };
 
 addEventListener('pointermove', (e) => {
   t.x = (e.clientX / innerWidth) * 2 - 1;
   t.y = -((e.clientY / innerHeight) * 2 - 1);
+  inside = true;
 });
-document.addEventListener('mouseleave', () => { t.x = t.y = 0; if (mode === 'drift') mode = 'look'; });
+document.addEventListener('mouseleave', () => { t.x = t.y = 0; inside = false; if (mode === 'drift') mode = 'look'; });
 
 function mark(attr, v) {
   document.querySelectorAll(`[data-${attr}]`).forEach((b) => b.classList.toggle('on', b.dataset[attr] === v));
@@ -151,11 +188,13 @@ addEventListener('wheel', () => {
 }, { passive: true });
 
 /* ========= LOOP ========= */
-const clock = new THREE.Clock();
+const timer = new THREE.Timer(), ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+const meshes = items.map((o) => o.mesh);
 const v3 = new THREE.Vector3(), tp = new THREE.Vector3(), tq = new THREE.Quaternion(), fwd = new THREE.Vector3();
 
 renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.05), el = clock.elapsedTime;
+  timer.update();
+  const dt = Math.min(timer.getDelta(), 0.05), el = timer.getElapsed();
   m.x = damp(m.x, t.x, 5, dt); m.y = damp(m.y, t.y, 5, dt);
   const speed = Math.hypot(t.x - prev.x, t.y - prev.y) / Math.max(dt, 1e-3);
   energy = damp(energy, Math.min(speed * 0.12, 2), 4, dt);
@@ -184,7 +223,16 @@ renderer.setAnimationLoop(() => {
 
   const xs = Math.min(1, camera.aspect / 1.7), fit = Math.min(1, 0.45 + camera.aspect * 0.35);
   const drift = mode === 'drift' ? 1 : 0;
+
+  // hover: la zona del objeto bajo el cursor se rompe y se separa
+  let hit = null;
+  if (inside && ready) { ray.setFromCamera(ptr.set(t.x, t.y), camera); hit = ray.intersectObjects(meshes)[0]; }
   for (const o of items) {
+    const on = hit?.object === o.mesh;
+    if (on) o.mesh.worldToLocal(o.hit.copy(hit.point));
+    o.amt = damp(o.amt, on ? 1 : 0, on ? 9 : 2.2, dt);           // se rompe rápido, se recompone lento
+    o.u.uAmt.value = o.amt; o.u.uTime.value = el;
+    o.u.uHit.value.lerp(o.hit, 1 - Math.exp(-14 * dt));
     v3.set(o.base.x * xs + m.x * 3.4 * o.k * drift, o.base.y + m.y * 2.2 * o.k * drift + Math.sin(el * o.k + o.s * 9) * 0.12, o.base.z);
     o.mesh.position.lerp(v3, 1 - Math.exp(-(2.5 + o.k * 1.5) * dt));
     o.mesh.scale.setScalar(Math.max(o.s * fit * intro * sm.v * (1 + energy * 0.12 * o.k), 1e-4));
@@ -205,3 +253,17 @@ renderer.setAnimationLoop(() => {
   document.body.classList.add('ready');
   ready = true;
 })();
+
+/* ========= MÚSICA: arranca con la primera interacción (los navegadores bloquean el autoplay) ========= */
+const song = new Audio(SONG);
+song.loop = true; song.volume = 0.7;
+const soundBtn = $('#sound');
+const sync = () => {
+  const on = !song.paused && !song.muted;
+  soundBtn.textContent = on ? 'Silenciar' : 'Activar sonido';
+  soundBtn.classList.toggle('on', on);
+};
+const play = () => { song.muted = false; return song.play().then(sync, () => console.warn('No se pudo reproducir', SONG)); };
+['pointerdown', 'keydown'].forEach((ev) =>
+  addEventListener(ev, (e) => { if (song.paused && !e.target.closest?.('#sound')) play(); }, { once: true }));
+soundBtn.addEventListener('click', () => { if (song.paused) play(); else { song.muted = !song.muted; sync(); } });

@@ -1,6 +1,6 @@
 :root { --bg: #2b84dc; --red: #ee1822; --navy: #071c52; }
 
-/* Pon tu archivo con licencia en /fonts. Si el sistema ya tiene Futura Bold Oblique, se usa local. */
+
 @font-face {
   font-family: "Futura Bold Oblique";
   src: local("Futura Bold Oblique"), local("Futura-BoldOblique"),

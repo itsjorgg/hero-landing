@@ -1,11 +1,16 @@
+//HERO LANDING WEB
+// INSPIRADO COMO PAGINA WEB PARA "WOR$T GIRL IN AMERICA" DE LA CANTANTE "SLAYYYTER"
+// JORGG ;)
+
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-/* ========= AJUSTES (cámbialos aquí) ========= */
-const BLUE = '#2b84dc', WHITE = '#ffffff', RED = '#ee1822'; // rayas blancas y azules, texto rojo
-const SONG = '/audio/song.mp3'; // pon tu canción en public/audio/
-const PAD = 1.25; // el plano del texto es más grande que la pantalla para que "Asoma" no deje bordes
+// rayas blancas y azules
+// texto rojo
+const BLUE = '#04519d', WHITE = '#b3b8d6', RED = '#eb0a16ea'; 
+const SONG = '/audio/song.mp3'; // cancion "DANCE"
+const PAD = 1.25; 
 const FONT = (px) => `italic 700 ${px}px "Futura Bold Oblique", Jost, Futura, sans-serif`;
 const R = 7;    // distancia de la cámara al objeto
 const D = 3;    // distancia del texto detrás del objeto
@@ -14,7 +19,12 @@ const FOV = 40;
 const $ = (s) => document.querySelector(s);
 const damp = (a, b, l, dt) => a + (b - a) * (1 - Math.exp(-l * dt));
 
-/* ========= ESCENA ========= */
+// LOGO "WOR$T GIRL IN AMERICA" , es un signo de pesos
+const logoImg = new Image();
+logoImg.src = 'public/logo.png'; 
+logoImg.onload = () => { if(typeof drawText === 'function') drawText(innerWidth, innerHeight); };
+
+// Configuración de la escena, cámara y renderizador
 const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -27,7 +37,7 @@ scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnviron
 const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 50);
 camera.position.set(0, 0, R);
 
-/* ========= TEXTO DETRÁS (plano con textura, así el vidrio lo refracta) ========= */
+// Texto por detrás, con textura de canvas.
 const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ toneMapped: false }));
 plane.position.z = -D;
 plane.visible = false;
@@ -40,7 +50,7 @@ function drawText(w, h) {
   const k = Math.min(devicePixelRatio, 2, 4096 / (Math.max(w, h) * PAD));
   tc.width = w * PAD * k; tc.height = h * PAD * k;
 
-  // rayas verticales azules y rayones, como la portada
+  // rayas verticales azules y rayones
   const sw = Math.max(14, Math.min(w / 28, 56)) * k;
   for (let x = 0, i = 0; x < tc.width; x += sw, i++) {
     tx.fillStyle = i % 2 ? WHITE : BLUE;
@@ -62,6 +72,20 @@ function drawText(w, h) {
   tx.fillStyle = RED; tx.textAlign = 'center'; tx.textBaseline = 'middle';
   lines.forEach((l, i) => tx.fillText(l, tc.width / 2, tc.height / 2 + (i - (lines.length - 1) / 2) * size * 0.9));
 
+  // Poner el logo abajo del texto
+  if (logoImg.complete && logoImg.naturalWidth > 0) {
+    const logoW = tc.width * 0.15; // Tamaño del logo (15% del ancho). Aumenta/disminuye este 0.15 a tu gusto.
+    const logoH = (logoW / logoImg.naturalWidth) * logoImg.naturalHeight;
+    const logoX = tc.width / 2 - logoW / 2;
+    
+    // Posición en Y logo
+    const margen = 20 * k;
+    const logoY = tc.height / 2 + ((lines.length / 2) * size * 0.9) + margen; 
+    
+    tx.drawImage(logoImg, logoX, logoY, logoW, logoH);
+  }
+  
+
   plane.material.map?.dispose();
   const tex = new THREE.CanvasTexture(tc);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -79,7 +103,7 @@ function resize() {
   drawText(w, h);
 }
 
-/* ========= OBJETOS 3D (vidrio transparente) ========= */
+// Objetos 3d, estrellas, cubos y esferas
 function starGeo() {
   const s = new THREE.Shape(), n = 5;
   for (let i = 0; i < n * 2; i++) {
@@ -91,8 +115,8 @@ function starGeo() {
   g.center();
   return g;
 }
-// Parte la geometría en "trozos": los triángulos de una misma celda comparten centro y azar,
-// así que se mueven juntos y al romperse se ven fragmentos en vez de polvo.
+
+// Fragmentos
 function shatter(g, cell = 0.5) {
   g = g.index ? g.toNonIndexed() : g;
   const p = g.attributes.position, n = p.count;
@@ -113,7 +137,7 @@ const GEO = {
   sphere: shatter(new THREE.SphereGeometry(1, 40, 28)),
 };
 
-// Un vidrio por objeto: cada uno tiene sus uniforms (punto del cursor y cuánto se rompe)
+// Material vidrio
 function makeGlass() {
   const mat = new THREE.MeshPhysicalMaterial({
     transmission: 1, thickness: 1.4, roughness: 0.06, ior: 1.5, dispersion: 0.5,
@@ -136,7 +160,7 @@ function makeGlass() {
   return mat;
 }
 
-// [x, y, z, escala, factor de seguimiento]: el primero es el héroe, el resto lo acompaña
+// Posición inicial de los objetos, tamaño y velocidad de giro
 const DEFS = [
   [0, 0, 0, 1.5, 0.5], [-3.3, 1.3, -0.5, 0.55, 1.2], [3.5, -1.2, 0.6, 0.75, 0.9],
   [-2.6, -1.7, 1, 0.4, 1.5], [2.6, 1.9, -1, 0.45, 1], [0.4, -2.1, -0.8, 0.35, 1.3], [-0.9, 2.2, 0, 0.3, 0.8],
@@ -149,9 +173,10 @@ const items = DEFS.map(([x, y, z, s, k], i) => {
   return { mesh, u: mat.userData.u, hit: new THREE.Vector3(), amt: 0, base: new THREE.Vector3(x, y, z), s, k, spin: (i % 2 ? -1 : 1) * (0.7 + (i % 3) * 0.25) };
 });
 
-/* ========= ESTADO Y MOUSE ========= */
+// Mouse
 let mode = 'look', shape = 'star', ready = false, intro = 0, energy = 0, inside = false;
-const sm = { v: 1, t: 1 };                       // escala al cambiar de forma
+// Escalar al cambiar de forma
+const sm = { v: 1, t: 1 };                       
 const t = { x: 0, y: 0 }, m = { x: 0, y: 0 }, prev = { x: 0, y: 0 };
 
 addEventListener('pointermove', (e) => {
@@ -174,7 +199,7 @@ document.addEventListener('click', (e) => {
   if (b?.dataset.shape) setShape(b.dataset.shape);
 });
 
-// Acciones del mouse: mover = Mira (por defecto), mantener clic = Desplaza, rueda = Asoma
+// Acciones del mouse
 let wheelTimer;
 const toLook = () => { if (mode === 'drift') mode = 'look'; };
 canvas.addEventListener('pointerdown', () => { mode = 'drift'; });
@@ -187,7 +212,7 @@ addEventListener('wheel', () => {
   wheelTimer = setTimeout(() => { if (mode === 'peek') mode = 'look'; }, 900);
 }, { passive: true });
 
-/* ========= LOOP ========= */
+// Animación 
 const timer = new THREE.Timer(), ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
 const meshes = items.map((o) => o.mesh);
 const v3 = new THREE.Vector3(), tp = new THREE.Vector3(), tq = new THREE.Quaternion(), fwd = new THREE.Vector3();
@@ -201,10 +226,7 @@ renderer.setAnimationLoop(() => {
   prev.x = t.x; prev.y = t.y;
   intro = damp(intro, ready ? 1 : 0, 2.5, dt);
   sm.v = damp(sm.v, sm.t, 10, dt);
-
-  // 1) MIRA: la cámara orbita y el objeto parece girar hacia el cursor
-  // 2) ASOMA: la cámara se desplaza y el texto de atrás se mueve distinto (paralaje)
-  // 3) DESPLAZA: la cámara queda fija y los objetos se separan de su posición original
+  
   if (mode === 'look') {
     const a = -m.x * 0.7, p = -m.y * 0.4;
     tp.set(Math.sin(a) * Math.cos(p), Math.sin(p), Math.cos(a) * Math.cos(p)).multiplyScalar(R);
@@ -213,7 +235,7 @@ renderer.setAnimationLoop(() => {
   camera.position.lerp(tp, 1 - Math.exp(-6 * dt));
   camera.lookAt(0, 0, 0);
 
-  // el texto siempre queda detrás: en "mira" mira a la cámara, en los otros es fijo
+  // Texto se queda detrás
   if (mode === 'look') {
     tp.copy(camera.position).addScaledVector(fwd.set(0, 0, -1).applyQuaternion(camera.quaternion), R + D);
     tq.copy(camera.quaternion);
@@ -224,7 +246,7 @@ renderer.setAnimationLoop(() => {
   const xs = Math.min(1, camera.aspect / 1.7), fit = Math.min(1, 0.45 + camera.aspect * 0.35);
   const drift = mode === 'drift' ? 1 : 0;
 
-  // hover: la zona del objeto bajo el cursor se rompe y se separa
+  // Hover sobre los objetos, fragmentos
   let hit = null;
   if (inside && ready) { ray.setFromCamera(ptr.set(t.x, t.y), camera); hit = ray.intersectObjects(meshes)[0]; }
   for (const o of items) {
@@ -242,7 +264,7 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
-/* ========= ARRANQUE: espera la fuente y entra directo ========= */
+// Inicialización
 (async function boot() {
   try {
     await Promise.race([document.fonts.load(FONT(100), 'WOR$T GIRL IN AMERICA'), new Promise((r) => setTimeout(r, 1500))]);
@@ -254,7 +276,9 @@ renderer.setAnimationLoop(() => {
   ready = true;
 })();
 
-/* ========= MÚSICA: arranca con la primera interacción (los navegadores bloquean el autoplay) ========= */
+// Audio
+// Suena cancion "Dance" al hacer un click
+// Se puede silenciar y activar el sonido con el boton
 const song = new Audio(SONG);
 song.loop = true; song.volume = 0.7;
 const soundBtn = $('#sound');
